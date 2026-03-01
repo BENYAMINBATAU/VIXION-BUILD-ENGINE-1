@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BENYAMIN BATAU ENGINE BUILD UP — Yamaha Vixion 150</title>
+  <meta name="description" content="Virtual engine assembly simulator — Yamaha Vixion 150cc SOHC. Build your engine from scratch, part by part." />
+  <meta name="author" content="Benyamin Batau" />
+  <meta name="theme-color" content="#050509" />
+
+  <!-- Open Graph -->
+  <meta property="og:title"       content="BENYAMIN BATAU ENGINE BUILD UP" />
+  <meta property="og:description" content="Yamaha Vixion 150 Engine Assembly Simulator" />
+  <meta property="og:type"        content="website" />
+
+  <link rel="stylesheet" href="css/global.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="js/core/GameState.js"></script>
+
+  <style>
+  /* ─── PAGE-SPECIFIC ────────────────────────────────────── */
+  body { overflow: hidden; }
+
+  /* HERO SPLIT LAYOUT */
+  .hero {
+    position: fixed;
+    inset: 0;
+    padding-top: 60px;
+    display: grid;
+    grid-template-columns: 1fr 440px;
+  }
+
+  /* LEFT: CANVAS */
+  .canvas-wrap {
+    position: relative;
+    overflow: hidden;
+  }
+
+  #engine-canvas { width: 100%; height: 100%; display: block; }
+
+  .canvas-corner {
+    position: absolute;
+    pointer-events: none;
+  }
+  .canvas-corner-tl { top: 16px; left: 16px; }
+  .canvas-corner-br { bottom: 20px; right: 20px; text-align: right; }
+
+  .canvas-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.62rem;
+    color: rgba(26,107,255,0.55);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .canvas-hint {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.56rem;
+    color: rgba(255,255,255,0.14);
+    margin-top: 4px;
+  }
+
+  /* Spec callouts on canvas */
+  .spec-callout {
+    position: absolute;
+    pointer-events: none;
+    animation: fadeIn 0.6s var(--ease-out) both;
+  }
+  .spec-callout .line {
+    width: 60px; height: 1px;
+    background: linear-gradient(90deg, rgba(26,107,255,0.7), transparent);
+    margin-bottom: 4px;
+  }
+  .spec-callout .val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.58rem;
+    color: rgba(26,107,255,0.7);
+    letter-spacing: 0.06em;
+  }
+
+  /* RIGHT: DASHBOARD PANEL */
+  .dashboard {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 28px 32px 40px;
+    background: linear-gradient(to right, transparent 0%, rgba(5,5,9,0.96) 10%, rgba(5,5,9,0.99) 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    position: relative;
+  }
+
+  .dashboard::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, var(--border), transparent);
+  }
+
+  /* GAME TITLE */
+  .game-title .kicker {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--yamaha-blue3);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .game-title .kicker::before { content: ''; width: 24px; height: 1px; background: var(--yamaha-blue3); }
+
+  .game-title h1 {
+    font-size: clamp(1.1rem, 2.2vw, 1.6rem);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: 0.06em;
+  }
+  .game-title h1 .highlight { color: var(--yamaha-blue3); }
+
+  .engine-spec-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text3);
+    margin-top: 8px;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .engine-spec-tag::before { content: '⚙'; font-size: 0.7rem; }
+
+  /* PLAYER CARD */
+  .player-card {
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: border-color var(--t-med);
+  }
+  .player-card:hover { border-color: var(--border2); }
+
+  .player-avatar {
+    width: 44px; height: 44px;
+    border-radius: var(--r-md);
+    background: linear-gradient(135deg, var(--yamaha-blue), var(--yamaha-blue3));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Orbitron', monospace;
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: 0 0 16px rgba(0,63,204,0.5);
+    position: relative;
+  }
+  .player-avatar::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: calc(var(--r-md) + 2px);
+    border: 1px solid rgba(26,107,255,0.4);
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+
+  .player-info { flex: 1; min-width: 0; }
+  .player-name { font-size: 1rem; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-meta { display: flex; gap: 6px; align-items: center; margin-top: 3px; }
+  .player-rank { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: var(--text3); letter-spacing: 0.05em; }
+
+  .player-score-wrap { text-align: right; flex-shrink: 0; }
+  .player-score { font-family: 'Orbitron', monospace; font-size: 1.2rem; font-weight: 700; color: var(--orange2); }
+  .player-xp { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: var(--text3); }
+
+  /* PROGRESS SECTION */
+  .overall-progress {
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.66rem;
+  }
+  .progress-header .key { color: var(--text3); letter-spacing: 0.08em; }
+  .progress-header .val { color: var(--yamaha-blue3); }
+
+  /* STAGE GRID */
+  .stage-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stage-card-mini {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 14px;
+    cursor: pointer;
+    transition: all var(--t-med) var(--ease-out);
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  .stage-card-mini::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    opacity: 0;
+    transition: opacity var(--t-med);
+  }
+
+  .stage-card-mini:hover { border-color: var(--yamaha-blue2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,63,204,0.15); }
+  .stage-card-mini:hover::after { opacity: 1; background: linear-gradient(90deg, transparent, var(--yamaha-blue3), transparent); }
+
+  .stage-card-mini.completed { border-color: rgba(0,255,136,0.25); }
+  .stage-card-mini.completed::after { opacity: 0.7; background: linear-gradient(90deg, transparent, var(--green2), transparent); }
+
+  .stage-card-mini.active { border-color: rgba(26,107,255,0.5); }
+  .stage-card-mini.active::after { opacity: 1; background: linear-gradient(90deg, transparent, var(--yamaha-blue3), transparent); }
+
+  .stage-card-mini.locked { opacity: 0.3; cursor: not-allowed; pointer-events: none; filter: grayscale(70%); }
+
+  .stage-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.56rem;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .stage-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .stage-parts-count {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+  .stage-status {
+    position: absolute;
+    top: 10px; right: 10px;
+    font-size: 0.85rem;
+  }
+  .stage-medal {
+    position: absolute;
+    bottom: 10px; right: 10px;
+    font-size: 0.8rem;
+  }
+  .stage-score-mini {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem;
+    color: var(--orange2);
+    margin-top: 4px;
+    display: none;
+  }
+  .stage-card-mini.completed .stage-score-mini { display: block; }
+  .stage-card-mini.completed .stage-name { color: var(--green); }
+
+  /* SPECS GRID */
+  .specs-mini {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .spec-item {
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 9px 11px;
+    transition: border-color var(--t-fast);
+  }
+  .spec-item:hover { border-color: var(--border2); }
+  .spec-item .k { font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .spec-item .v { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; color: var(--text-mono); margin-top: 3px; }
+
+  /* ACTION BUTTONS */
+  .action-row { display: flex; gap: 8px; }
+  .action-row .btn-primary { flex: 1; }
+
+  /* STATS ROW */
+  .stats-mini {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .stats-mini .stat-card { padding: 12px; }
+  .stats-mini .stat-card .stat-value { font-size: 1.3rem; }
+
+  /* HEADER EXTRAS */
+  .header-left { display: flex; align-items: center; gap: var(--gap-md); }
+  .version-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--text3);
+    background: var(--dark3);
+    padding: 3px 8px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border);
+  }
+
+  /* LEADERBOARD */
+  .lb-section { display: none; }
+  .lb-section.visible { display: block; }
+
+  /* ACHIEVEMENT MINI STRIP */
+  .achievement-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .achievement-strip::-webkit-scrollbar { display: none; }
+  .ach-pip {
+    flex-shrink: 0;
+    width: 36px; height: 36px;
+    border-radius: var(--r-sm);
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+    filter: grayscale(1) brightness(0.5);
+    transition: all var(--t-med);
+    cursor: default;
+    title: attr(data-title);
+  }
+  .ach-pip.unlocked {
+    filter: none;
+    border-color: var(--border-gold);
+    background: rgba(255,215,0,0.06);
+    box-shadow: 0 0 8px rgba(255,215,0,0.2);
+  }
+
+  /* RPM / STATUS LIGHT */
+  .status-lights {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .status-light {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-light.green { background: var(--green); box-shadow: 0 0 6px var(--green); animation: glow-pulse 2s infinite; }
+  .status-light.blue  { background: var(--yamaha-blue3); box-shadow: 0 0 6px var(--yamaha-blue3); animation: glow-pulse 2.5s infinite 0.5s; }
+  .status-light.off   { background: var(--text4); }
+
+  /* ─── RESPONSIVE ──────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; }
+    .canvas-wrap { display: none; }
+    .dashboard { background: var(--dark); padding: 20px 20px 40px; overflow-y: auto; }
+  }
+  </style>
+</head>
+<body class="bg-grid scanline">
+
+  <!-- NOISE OVERLAY -->
+  <div class="bg-noise"></div>
+
+  <!-- ═══ HEADER ═══════════════════════════════════════════════════ -->
+  <header class="game-header">
+    <div class="header-left">
+      <a href="index.html" class="logo">
+        <div class="logo-dot"></div>
+        BATAU ENGINE
+      </a>
+      <span class="version-tag">v2.0.0</span>
+    </div>
+
+    <div class="status-lights" style="margin-left: auto;">
+      <div class="status-light" id="sys-light-1" style="background:var(--green);box-shadow:0 0 6px var(--green);animation:glow-pulse 2s infinite;"></div>
+      <div class="status-light" id="sys-light-2" style="background:var(--yamaha-blue3);box-shadow:0 0 6px var(--yamaha-blue3);animation:glow-pulse 2.5s infinite 0.5s;"></div>
+      <div class="status-light" id="sys-light-3" class="off" style="background:var(--text4);"></div>
+    </div>
+
+    <div class="hud-bar">
+      <div class="hud-stat">
+        <span class="label">MEKANIK</span>
+        <span class="value blue counter" id="hud-player">—</span>
+      </div>
+      <div class="divider-v" style="height:28px;"></div>
+      <div class="hud-stat">
+        <span class="label">SKOR</span>
+        <span class="value orange counter" id="hud-score">0</span>
+      </div>
+      <div class="divider-v" style="height:28px;"></div>
+      <div class="hud-stat">
+        <span class="label">STAGE</span>
+        <span class="value green" id="hud-progress">0/5</span>
+      </div>
+      <div class="divider-v" style="height:28px;"></div>
+      <div class="hud-stat">
+        <span class="label">XP</span>
+        <span class="value gold counter" id="hud-xp">0</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══ HERO ═════════════════════════════════════════════════════ -->
+  <main class="hero">
+
+    <!-- LEFT: 3D ENGINE CANVAS -->
+    <div class="canvas-wrap">
+      <canvas id="engine-canvas"></canvas>
+
+      <div class="canvas-corner canvas-corner-tl">
+        <div class="canvas-label">YAMAHA VIXION 150 · SOHC 4T</div>
+        <div class="canvas-hint">drag to rotate · scroll to zoom</div>
+      </div>
+
+      <div class="canvas-corner canvas-corner-br">
+        <div class="canvas-label" id="canvas-rpm-label">IDLE: 1.400 rpm</div>
+      </div>
+
+      <!-- Spec callout decorations -->
+      <div class="spec-callout" style="top:28%;left:8%;animation-delay:0.4s;">
+        <div class="line"></div>
+        <div class="val">57.0 mm BORE</div>
+      </div>
+      <div class="spec-callout" style="top:55%;left:5%;animation-delay:0.7s;">
+        <div class="line" style="width:40px;"></div>
+        <div class="val">149.8 cc</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: DASHBOARD -->
+    <div class="dashboard">
+
+      <!-- TITLE -->
+      <div class="game-title anim-fade-in">
+        <div class="kicker">Engine Assembly Simulator</div>
+        <h1>BENYAMIN<br><span class="highlight">BATAU</span><br>ENGINE BUILD UP</h1>
+        <div class="engine-spec-tag">YAMAHA VIXION 150 · 149.8cc · SOHC · 57×58.7mm · FI</div>
+      </div>
+
+      <!-- PLAYER CARD -->
+      <div id="player-section" style="display:none;" class="anim-fade-in delay-1">
+        <div class="section-label blue">MEKANIK AKTIF</div>
+        <div class="player-card" style="margin-top:8px;">
+          <div class="player-avatar" id="player-avatar">B</div>
+          <div class="player-info">
+            <div class="player-name" id="player-name-display">Mekanik</div>
+            <div class="player-meta">
+              <span class="player-rank" id="player-rank-display">MAGANG</span>
+              <span class="badge badge-blue" id="player-level-badge">APPRENTICE</span>
+            </div>
+          </div>
+          <div class="player-score-wrap">
+            <div class="player-score" id="player-score-display">0</div>
+            <div class="player-xp">XP: <span id="player-xp-display">0</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATS ROW -->
+      <div id="stats-section" style="display:none;" class="anim-fade-in delay-2">
+        <div class="stats-mini">
+          <div class="stat-card">
+            <div class="stat-value text-gradient-blue" id="stat-accuracy">100%</div>
+            <div class="stat-label">Akurasi</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value text-gradient-orange" id="stat-time">—</div>
+            <div class="stat-label">Total Waktu</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--red);" id="stat-errors">0</div>
+            <div class="stat-label">Error</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OVERALL PROGRESS -->
+      <div id="progress-section" style="display:none;" class="anim-fade-in delay-2">
+        <div class="section-label blue">PROGRES PERAKITAN</div>
+        <div class="overall-progress" style="margin-top:8px;">
+          <div class="progress-header">
+            <span class="key">STAGE SELESAI</span>
+            <span class="val" id="prog-text">0 / 5 STAGE</span>
+          </div>
+          <div class="progress-track progress-track-lg">
+            <div class="progress-fill" id="prog-bar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STAGE GRID -->
+      <div class="anim-fade-in delay-2">
+        <div class="section-label blue">TAHAP PERAKITAN</div>
+        <div class="stage-grid" style="margin-top:8px;">
+
+          <div class="stage-card-mini" id="card-1" onclick="enterStage(1)">
+            <div class="stage-num">STAGE 01</div>
+            <div class="stage-name">Cylinder Head</div>
+            <div class="stage-parts-count">16 part · Valve & Cam</div>
+            <div class="stage-score-mini" id="score-1">0 pts</div>
+            <div class="stage-status" id="status-1">⚙️</div>
+            <div class="stage-medal" id="medal-1"></div>
+          </div>
+
+          <div class="stage-card-mini locked" id="card-2" onclick="enterStage(2)">
+            <div class="stage-num">STAGE 02</div>
+            <div class="stage-name">Cylinder Block</div>
+            <div class="stage-parts-count">12 part · Piston & Crank</div>
+            <div class="stage-score-mini" id="score-2">0 pts</div>
+            <div class="stage-status" id="status-2">🔒</div>
+            <div class="stage-medal" id="medal-2"></div>
+          </div>
+
+          <div class="stage-card-mini locked" id="card-3" onclick="enterStage(3)">
+            <div class="stage-num">STAGE 03</div>
+            <div class="stage-name">Clutch & Transmisi</div>
+            <div class="stage-parts-count">10 part · 6-Speed</div>
+            <div class="stage-score-mini" id="score-3">0 pts</div>
+            <div class="stage-status" id="status-3">🔒</div>
+            <div class="stage-medal" id="medal-3"></div>
+          </div>
+
+          <div class="stage-card-mini locked" id="card-4" onclick="enterStage(4)">
+            <div class="stage-num">STAGE 04</div>
+            <div class="stage-name">Generator / Spull</div>
+            <div class="stage-parts-count">8 part · AC Generator</div>
+            <div class="stage-score-mini" id="score-4">0 pts</div>
+            <div class="stage-status" id="status-4">🔒</div>
+            <div class="stage-medal" id="medal-4"></div>
+          </div>
+
+          <div class="stage-card-mini locked" id="card-5" onclick="enterStage(5)" style="grid-column: span 2;">
+            <div class="stage-num">STAGE 05 · FINAL</div>
+            <div class="stage-name">🔥 Test Running</div>
+            <div class="stage-parts-count">3 part · Start engine · RPM test · Final score</div>
+            <div class="stage-score-mini" id="score-5">0 pts</div>
+            <div class="stage-status" id="status-5">🔒</div>
+            <div class="stage-medal" id="medal-5"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ACHIEVEMENTS STRIP -->
+      <div id="ach-section" style="display:none;" class="anim-fade-in delay-3">
+        <div class="section-label blue">ACHIEVEMENTS</div>
+        <div class="achievement-strip" id="ach-strip" style="margin-top:8px;"></div>
+      </div>
+
+      <!-- ENGINE SPECS -->
+      <div class="anim-fade-in delay-3">
+        <div class="section-label blue">SPESIFIKASI MESIN</div>
+        <div class="specs-mini" style="margin-top:8px;">
+          <div class="spec-item"><div class="k">Displacement</div><div class="v">149.8 cc</div></div>
+          <div class="spec-item"><div class="k">Bore × Stroke</div><div class="v">57.0 × 58.7 mm</div></div>
+          <div class="spec-item"><div class="k">Compression</div><div class="v">10.4 : 1</div></div>
+          <div class="spec-item"><div class="k">Max Power</div><div class="v">11.1 kW / 8.500</div></div>
+          <div class="spec-item"><div class="k">Transmission</div><div class="v">6-speed</div></div>
+          <div class="spec-item"><div class="k">Redline</div><div class="v">10.000 rpm</div></div>
+        </div>
+      </div>
+
+      <!-- ACTION BUTTONS -->
+      <div class="action-row anim-fade-in delay-4">
+        <button class="btn btn-primary btn-lg" id="btn-play" onclick="handlePlay()">
+          ▶ MULAI RAKIT
+        </button>
+        <button class="btn btn-ghost btn-icon" id="btn-leaderboard" onclick="toggleLeaderboard()" title="Leaderboard">🏆</button>
+        <button class="btn btn-ghost btn-icon" id="btn-reset" onclick="confirmReset()" title="Reset Game">↺</button>
+        <button class="btn btn-ghost btn-icon" id="btn-sound" onclick="toggleSound()" title="Sound">🔊</button>
+      </div>
+
+      <!-- LEADERBOARD -->
+      <div id="lb-section" class="lb-section anim-fade-in">
+        <div class="section-label blue">TOP 10 LEADERBOARD</div>
+        <div id="lb-list" style="margin-top:8px;"></div>
+      </div>
+
+    </div><!-- /dashboard -->
+  </main>
+
+  <!-- ═══ NEW GAME MODAL ════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-newgame">
+    <div class="modal anim-scale-in">
+      <div style="margin-bottom:20px;">
+        <div class="section-label blue" style="margin-bottom:10px;">DAFTAR MEKANIK</div>
+        <h2 style="font-size:1.1rem; letter-spacing:0.06em;">New Game</h2>
+        <p style="color:var(--text3);font-size:0.85rem;margin-top:6px;font-family:'Rajdhani',sans-serif;">
+          Masukkan nama dan pilih level kesulitan untuk mulai merakit mesin Vixion 150.
+        </p>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--text3);letter-spacing:0.1em;display:block;margin-bottom:8px;text-transform:uppercase;">
+          ◆ Nama Mekanik
+        </label>
+        <input type="text" class="input-field" id="input-name"
+          placeholder="Masukkan nama kamu..."
+          maxlength="20"
+          autocomplete="off"
+          onkeydown="if(event.key==='Enter')startNewGame()" />
+      </div>
+
+      <div style="margin-bottom:22px;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--text3);letter-spacing:0.1em;margin-bottom:10px;text-transform:uppercase;">
+          ◆ Level Kesulitan
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;" id="level-grid">
+          <div class="level-option selected" onclick="selectLevel('apprentice')" data-level="apprentice">
+            <div class="level-radio"></div>
+            <div>
+              <div style="font-weight:700;font-size:0.9rem;">🟢 Apprentice</div>
+              <div style="font-size:0.72rem;color:var(--text3);margin-top:2px;font-family:'Share Tech Mono',monospace;">Panduan lengkap · Nama part tampil · Urutan diberi petunjuk</div>
+            </div>
+            <span class="badge badge-green" style="margin-left:auto;flex-shrink:0;">+0 XP</span>
+          </div>
+          <div class="level-option" onclick="selectLevel('mechanic')" data-level="mechanic">
+            <div class="level-radio"></div>
+            <div>
+              <div style="font-weight:700;font-size:0.9rem;">🟡 Mechanic</div>
+              <div style="font-size:0.72rem;color:var(--text3);margin-top:2px;font-family:'Share Tech Mono',monospace;">Panduan minimal · Nama muncul saat hover</div>
+            </div>
+            <span class="badge badge-orange" style="margin-left:auto;flex-shrink:0;">+200 pts</span>
+          </div>
+          <div class="level-option" onclick="selectLevel('master')" data-level="master">
+            <div class="level-radio"></div>
+            <div>
+              <div style="font-weight:700;font-size:0.9rem;">🔴 Master</div>
+              <div style="font-size:0.72rem;color:var(--text3);margin-top:2px;font-family:'Share Tech Mono',monospace;">Tanpa panduan · Tanpa nama · Hafal sendiri</div>
+            </div>
+            <span class="badge badge-red" style="margin-left:auto;flex-shrink:0;">+500 pts</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-primary btn-2xl" onclick="startNewGame()" style="flex:2;">
+          ⚙ MULAI PERAKITAN
+        </button>
+        <button class="btn btn-ghost" onclick="closeModal('modal-newgame')">
+          BATAL
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONFIRM RESET MODAL ════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-reset">
+    <div class="modal anim-scale-in">
+      <div style="margin-bottom:24px;text-align:center;">
+        <div style="font-size:2.8rem;margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(255,26,68,0.5));">⚠️</div>
+        <h2 style="font-size:1rem;color:var(--red);letter-spacing:0.08em;">RESET PROGRESS?</h2>
+        <p style="color:var(--text3);font-size:0.85rem;margin-top:10px;line-height:1.6;font-family:'Rajdhani',sans-serif;">
+          Semua progress, skor, XP, achievements, dan data akan terhapus permanen.<br>
+          <span style="color:var(--red2);">Tindakan ini tidak bisa dibatalkan.</span>
+        </p>
+      </div>
+      <div class="action-row">
+        <button class="btn btn-danger btn-lg" onclick="doReset()" style="flex:1;">🗑 HAPUS SEMUA</button>
+        <button class="btn btn-ghost btn-lg" onclick="closeModal('modal-reset')" style="flex:1;">BATAL</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container"></div>
+
+  <!-- ═══ SCRIPTS ═══════════════════════════════════════════════════ -->
+  <script>
+  // ─── 3D ENGINE SCENE ─────────────────────────────────────────────
+  (function initEngine3D() {
+    const canvas = document.getElementById('engine-canvas');
+    if (!canvas) return;
+
+    const W = canvas.parentElement.clientWidth;
+    const H = canvas.parentElement.clientHeight;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(W, H);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.95;
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x050509, 0.03);
+
+    const camera = new THREE.PerspectiveCamera(46, W / H, 0.1, 100);
+    camera.position.set(4.5, 3.2, 5.5);
+    camera.lookAt(0, 0.5, 0);
+
+    // ── LIGHTING ──
+    scene.add(new THREE.AmbientLight(0x223355, 2));
+
+    const key = new THREE.DirectionalLight(0xCCDDFF, 3.5);
+    key.position.set(5, 10, 5);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.near = 0.5;
+    key.shadow.camera.far  = 25;
+    scene.add(key);
+
+    const fill = new THREE.DirectionalLight(0x334488, 1.2);
+    fill.position.set(-4, 3, -4);
+    scene.add(fill);
+
+    const bluePoint = new THREE.PointLight(0x0033BB, 10, 18);
+    bluePoint.position.set(-4, 3, -3);
+    scene.add(bluePoint);
+
+    const orangePoint = new THREE.PointLight(0xFF4400, 4, 10);
+    orangePoint.position.set(3, -1.5, 4);
+    scene.add(orangePoint);
+
+    const topLight = new THREE.PointLight(0x6699FF, 6, 12);
+    topLight.position.set(0, 6, 0);
+    scene.add(topLight);
+
+    // ── MATERIALS ──
+    const M = (color, roughness, metalness, emissive=0x000000, emissiveIntensity=0) =>
+      new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive, emissiveIntensity });
+
+    const matAlum    = M(0x8A8E9A, 0.30, 0.88);
+    const matChrome  = M(0xC8CDD8, 0.08, 1.00);
+    const matDark    = M(0x252835, 0.55, 0.75);
+    const matGasket  = M(0x18140A, 0.92, 0.10);
+    const matBlue    = M(0x001555, 0.38, 0.82);
+    const matCopper  = M(0xB87333, 0.35, 0.90, 0xB87333, 0.08);
+    const matRed     = M(0x660018, 0.45, 0.70, 0x220008, 0.05);
+    const matGlow    = M(0x003FCC, 0.5, 0.5, 0x003FCC, 0.15);
+
+    // ── ENGINE GROUP ──
+    const engine = new THREE.Group();
+    scene.add(engine);
+
+    function mesh(geo, mat, x=0, y=0, z=0, rx=0, ry=0, rz=0) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.rotation.set(rx, ry, rz);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      engine.add(m);
+      return m;
+    }
+
+    // ── CRANKCASE (main body) ──
+    mesh(new THREE.BoxGeometry(2.5, 1.9, 1.7), matAlum);
+    // Ribs
+    for (let i = -0.9; i <= 0.9; i += 0.3)
+      mesh(new THREE.BoxGeometry(0.04, 1.92, 1.72), matDark, i, 0, 0);
+    // Oil pan bump
+    mesh(new THREE.BoxGeometry(1.8, 0.3, 1.4), matDark, 0, -1.1, 0);
+
+    // ── CYLINDER BLOCK ──
+    mesh(new THREE.CylinderGeometry(0.44, 0.48, 1.25, 18), matAlum, 0, 1.55, 0);
+    // Cooling fins
+    for (let i = 0; i < 6; i++)
+      mesh(new THREE.CylinderGeometry(0.57, 0.57, 0.045, 18), matAlum, 0, 0.93 + i * 0.19, 0);
+
+    // ── HEAD GASKET ──
+    mesh(new THREE.CylinderGeometry(0.455, 0.455, 0.045, 18), matGasket, 0, 2.18, 0);
+
+    // ── CYLINDER HEAD ──
+    mesh(new THREE.BoxGeometry(1.45, 0.72, 1.25), matAlum, 0, 2.65, 0);
+    for (let i = 0; i < 4; i++)
+      mesh(new THREE.BoxGeometry(1.47, 0.04, 1.05), matAlum, 0, 2.3 + i * 0.14, 0);
+
+    // ── CAMSHAFT COVER ──
+    mesh(new THREE.BoxGeometry(1.25, 0.38, 1.05), matDark, 0, 3.15, 0);
+
+    // ── VALVES ──
+    [-0.23, 0.23].forEach((x, i) => {
+      mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.55, 10), matChrome, x, 2.58, 0.12);
+      mesh(new THREE.CylinderGeometry(i===0?0.145:0.125, i===0?0.145:0.125, 0.04, 12), matChrome, x, 2.34, 0.12);
+      mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.08, 8), matDark, x, 2.84, 0.12);
+    });
+
+    // ── TIMING CHAIN COVER ──
+    mesh(new THREE.BoxGeometry(0.2, 2.6, 0.38), matDark, 0.68, 1.22, 0.75);
+    mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.18, 8), matGlow, 0.68, 2.6, 0.75, 0, 0, Math.PI/2);
+
+    // ── PISTON ──
+    mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.38, 18), matAlum, 0, 1.12, 0);
+    [1.2, 1.10].forEach(y =>
+      mesh(new THREE.TorusGeometry(0.41, 0.019, 8, 22), matChrome, 0, y, 0, Math.PI/2, 0, 0)
+    );
+
+    // ── CRANKSHAFT ──
+    mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.9, 12), matChrome, 0, -0.22, 0, 0, 0, Math.PI/2);
+    [-0.42, 0.42].forEach(x =>
+      mesh(new THREE.BoxGeometry(0.2, 0.55, 0.42), matDark, x, -0.22, 0)
+    );
+    mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.28, 12), matChrome, 0.28, -0.22, 0.46, 0, 0, Math.PI/2);
+
+    // ── LEFT COVER (Generator) ──
+    mesh(new THREE.BoxGeometry(0.20, 1.9, 1.7), matBlue, -1.35, 0, 0);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.16, 8), matCopper,
+        -1.42, Math.sin(a) * 0.47, Math.cos(a) * 0.47, 0, 0, Math.PI/2);
+    }
+    mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.12, 22), matDark, -1.38, 0, 0, 0, 0, Math.PI/2);
+    mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.12, 10), matChrome, -1.45, 0, 0, 0, 0, Math.PI/2);
+
+    // ── RIGHT COVER (Clutch) ──
+    mesh(new THREE.BoxGeometry(0.20, 1.9, 1.7), matBlue, 1.35, 0, 0);
+    mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.14, 18), matAlum, 1.39, 0, 0, 0, 0, Math.PI/2);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.1, 8), matChrome,
+        1.44, Math.sin(a) * 0.3, Math.cos(a) * 0.3, 0, 0, Math.PI/2);
+    }
+
+    // ── OIL DRAIN BOLT ──
+    mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.14, 8), matChrome, 0.3, -0.98, 0.74);
+    // ── COOLANT TEMP SENSOR ──
+    mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 8), matRed, -0.5, 2.0, 0.8);
+    // ── MOUNTING BOLTS ──
+    [[-0.9,-0.8],[-0.9,0.8],[0.9,-0.8],[0.9,0.8]].forEach(([x,z]) =>
+      mesh(new THREE.CylinderGeometry(0.05,0.05,0.04,8), matChrome, x, -1.0, z)
+    );
+
+    // ── FLOOR ──
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(22, 22),
+      new THREE.MeshStandardMaterial({ color:0x050509, roughness:1, metalness:0 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.08;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // ── GRID ──
+    const grid = new THREE.GridHelper(14, 22, 0x002080, 0x0D0D1A);
+    grid.position.y = -1.07;
+    scene.add(grid);
+
+    // ── ORBIT CONTROLS ──
+    let isDrag = false, prevX = 0, prevY = 0;
+    let rotY = -0.4, rotX = 0.18, zoom = 1.0;
+    let autoRotate = true, autoTimer = null;
+
+    canvas.addEventListener('mousedown', e => {
+      isDrag = true; autoRotate = false;
+      prevX = e.clientX; prevY = e.clientY;
+    });
+    window.addEventListener('mouseup', () => {
+      isDrag = false;
+      clearTimeout(autoTimer);
+      autoTimer = setTimeout(() => { autoRotate = true; }, 4000);
+    });
+    window.addEventListener('mousemove', e => {
+      if (!isDrag) return;
+      rotY += (e.clientX - prevX) * 0.007;
+      rotX = Math.max(-0.65, Math.min(0.85, rotX + (e.clientY - prevY) * 0.005));
+      prevX = e.clientX; prevY = e.clientY;
+    });
+    canvas.addEventListener('wheel', e => {
+      zoom = Math.max(0.45, Math.min(2.2, zoom + e.deltaY * 0.0009));
+      e.preventDefault();
+    }, { passive: false });
+
+    // Touch support
+    let lastTouchX = 0, lastTouchY = 0, lastPinchDist = 0;
+    canvas.addEventListener('touchstart', e => {
+      isDrag = true; autoRotate = false;
+      if (e.touches.length === 1) { lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY; }
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastPinchDist = Math.sqrt(dx*dx + dy*dy);
+      }
+    }, { passive: true });
+    canvas.addEventListener('touchmove', e => {
+      if (e.touches.length === 1) {
+        rotY += (e.touches[0].clientX - lastTouchX) * 0.006;
+        rotX = Math.max(-0.65, Math.min(0.85, rotX + (e.touches[0].clientY - lastTouchY) * 0.004));
+        lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
+      }
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        zoom = Math.max(0.45, Math.min(2.2, zoom * (lastPinchDist / dist)));
+        lastPinchDist = dist;
+      }
+    }, { passive: true });
+    canvas.addEventListener('touchend', () => {
+      isDrag = false;
+      clearTimeout(autoTimer);
+      autoTimer = setTimeout(() => { autoRotate = true; }, 3500);
+    });
+
+    // ── ANIMATE ──
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+      if (autoRotate) rotY += 0.0035;
+      engine.rotation.y  = rotY;
+      engine.rotation.x  = rotX;
+      engine.position.y  = Math.sin(t * 0.55) * 0.065;
+      camera.position.set(4.5 * zoom, 3.2 * zoom, 5.5 * zoom);
+      camera.lookAt(0, 0.5, 0);
+      bluePoint.intensity = 8 + Math.sin(t * 1.1) * 3;
+      topLight.intensity  = 5 + Math.sin(t * 0.7 + 1) * 2;
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // ── RESIZE ──
+    const ro = new ResizeObserver(() => {
+      const w = canvas.parentElement.clientWidth;
+      const h = canvas.parentElement.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+    ro.observe(canvas.parentElement);
+  })();
+
+  // ─── GLOBAL STATE ────────────────────────────────────────────────
+  let selectedLevel = 'apprentice';
+  let soundEnabled  = true;
+
+  // ─── DASHBOARD INIT ──────────────────────────────────────────────
+  function initDashboard() {
+    const state = GameState.load();
+
+    if (state) {
+      showPlayerSection(state);
+      showProgressSection(state);
+      showStatsSection(state);
+      showAchievements(state);
+      updateStageCards(state);
+
+      document.getElementById('btn-play').innerHTML = '▶ LANJUTKAN';
+      document.getElementById('sys-light-3').style.cssText = 'background:var(--orange2);box-shadow:0 0 6px var(--orange2);animation:glow-pulse 2s infinite;';
+    }
+  }
+
+  function showPlayerSection(state) {
+    const el = document.getElementById('player-section');
+    el.style.display = 'block';
+
+    const init = (state.playerName || 'M').charAt(0).toUpperCase();
+    document.getElementById('player-avatar').textContent = init;
+    document.getElementById('player-name-display').textContent = state.playerName || 'Mekanik';
+    document.getElementById('player-rank-display').textContent = (state.rank || 'MAGANG').toUpperCase();
+    document.getElementById('player-level-badge').textContent  = state.level.toUpperCase();
+
+    const levelBadgeClasses = { apprentice:'badge-green', mechanic:'badge-orange', master:'badge-red' };
+    const badge = document.getElementById('player-level-badge');
+    badge.className = `badge ${levelBadgeClasses[state.level] || 'badge-blue'}`;
+
+    document.getElementById('player-score-display').textContent = (state.totalScore || 0).toLocaleString('id-ID');
+    document.getElementById('player-xp-display').textContent    = (state.totalXP || 0).toLocaleString('id-ID');
+
+    // HUD
+    document.getElementById('hud-player').textContent   = state.playerName || '—';
+    document.getElementById('hud-score').textContent    = (state.totalScore || 0).toLocaleString('id-ID');
+    document.getElementById('hud-progress').textContent = `${state.completedStages.length}/5`;
+    document.getElementById('hud-xp').textContent       = (state.totalXP || 0).toLocaleString('id-ID');
+  }
+
+  function showProgressSection(state) {
+    document.getElementById('progress-section').style.display = 'block';
+    const pct = (state.completedStages.length / 5) * 100;
+    document.getElementById('prog-bar').style.width  = pct + '%';
+    document.getElementById('prog-text').textContent = `${state.completedStages.length} / 5 STAGE`;
+    if (pct >= 100) document.getElementById('prog-bar').classList.add('complete');
+  }
+
+  function showStatsSection(state) {
+    document.getElementById('stats-section').style.display = 'block';
+    const acc  = state.analytics?.accuracy ?? 100;
+    const time = state.totalTime   ? GameState.formatTime(state.totalTime) : '—';
+    const errs = state.totalErrors ?? 0;
+    document.getElementById('stat-accuracy').textContent = acc + '%';
+    document.getElementById('stat-time').textContent     = time;
+    document.getElementById('stat-errors').textContent   = errs;
+  }
+
+  function showAchievements(state) {
+    if (!state.achievements || state.achievements.length === 0) return;
+    document.getElementById('ach-section').style.display = 'block';
+
+    const earned = new Set(state.achievements);
+    const strip  = document.getElementById('ach-strip');
+    const defs   = Object.values(window.ACHIEVEMENTS || {});
+
+    strip.innerHTML = defs.map(a => `
+      <div class="ach-pip ${earned.has(a.id) ? 'unlocked' : ''}"
+           title="${a.name}: ${a.desc}">${a.icon}</div>
+    `).join('');
+  }
+
+  function updateStageCards(state) {
+    for (let i = 1; i <= 5; i++) {
+      const card     = document.getElementById(`card-${i}`);
+      const statusEl = document.getElementById(`status-${i}`);
+      const medalEl  = document.getElementById(`medal-${i}`);
+      const scoreEl  = document.getElementById(`score-${i}`);
+
+      card.classList.remove('locked', 'completed', 'active');
+
+      const stageData = state.stages[i];
+      if (stageData?.completed) {
+        card.classList.add('completed');
+        statusEl.textContent = '✅';
+        medalEl.textContent  = GameState.getMedalIcon?.(stageData.medal) ?? '';
+        scoreEl.textContent  = (stageData.score || 0).toLocaleString('id-ID') + ' pts';
+      } else if (GameState.isStageUnlocked(i)) {
+        card.classList.add('active');
+        statusEl.textContent = '⚙️';
+        medalEl.textContent  = '';
+      } else {
+        card.classList.add('locked');
+        statusEl.textContent = '🔒';
+        medalEl.textContent  = '';
+      }
+    }
+  }
+
+  // ─── BUTTON HANDLERS ─────────────────────────────────────────────
+  function handlePlay() {
+    if (soundEnabled) GameState.playSound?.('click');
+    const state = GameState.load();
+    if (state) {
+      GameState.goToStage(state.currentStage || 1);
+    } else {
+      openModal('modal-newgame');
+      setTimeout(() => document.getElementById('input-name').focus(), 350);
+    }
+  }
+
+  function enterStage(num) {
+    if (!GameState.isStageUnlocked(num)) {
+      if (soundEnabled) GameState.playSound?.('error');
+      showToast('🔒 Stage terkunci! Selesaikan stage sebelumnya dulu.', 'error');
+      return;
+    }
+    if (soundEnabled) GameState.playSound?.('click');
+    GameState.goToStage(num);
+  }
+
+  function selectLevel(level) {
+    selectedLevel = level;
+    document.querySelectorAll('.level-option').forEach(el => {
+      el.classList.toggle('selected', el.dataset.level === level);
+    });
+    if (soundEnabled) GameState.playSound?.('click');
+  }
+
+  function startNewGame() {
+    const name = document.getElementById('input-name').value.trim();
+    if (!name) {
+      document.getElementById('input-name').focus();
+      showToast('⚠ Masukkan nama mekanik dulu!', 'warn');
+      if (soundEnabled) GameState.playSound?.('error');
+      return;
+    }
+    if (soundEnabled) GameState.playSound?.('success');
+    GameState.newGame(name, selectedLevel);
+    closeModal('modal-newgame');
+    showToast(`🔧 Selamat datang, ${name}! Mari mulai dari Stage 1.`, 'success');
+    setTimeout(() => {
+      initDashboard();
+      GameState.goToStage(1);
+    }, 1100);
+  }
+
+  function confirmReset() {
+    if (!GameState.exists()) {
+      showToast('Tidak ada progress yang bisa direset.', 'info');
+      return;
+    }
+    if (soundEnabled) GameState.playSound?.('click');
+    openModal('modal-reset');
+  }
+
+  function doReset() {
+    GameState.delete();
+    closeModal('modal-reset');
+    showToast('Progress berhasil direset.', 'info');
+    setTimeout(() => location.reload(), 800);
+  }
+
+  function toggleSound() {
+    soundEnabled = !soundEnabled;
+    document.getElementById('btn-sound').textContent = soundEnabled ? '🔊' : '🔇';
+    showToast(soundEnabled ? 'Sound ON 🔊' : 'Sound OFF 🔇', 'info');
+  }
+
+  // ─── LEADERBOARD ─────────────────────────────────────────────────
+  function toggleLeaderboard() {
+    const sec = document.getElementById('lb-section');
+    if (sec.classList.contains('visible')) {
+      sec.classList.remove('visible');
+      return;
+    }
+    renderLeaderboard();
+    sec.classList.add('visible');
+  }
+
+  function renderLeaderboard() {
+    const lb     = GameState.getLeaderboard();
+    const listEl = document.getElementById('lb-list');
+
+    if (lb.length === 0) {
+      listEl.innerHTML = `
+        <div style="color:var(--text3);font-size:0.78rem;text-align:center;padding:20px;
+          font-family:'Share Tech Mono',monospace;border:1px solid var(--border);border-radius:var(--r-md);">
+          Belum ada skor di leaderboard.<br>Selesaikan game untuk masuk!
+        </div>`;
+      return;
+    }
+
+    const rankColors = ['#FFD700','#C0C0C0','#CD7F32','#7090AA','#607080','#506070','#405060','#304050','#203040','#102030'];
+    listEl.innerHTML = lb.map((e, i) => `
+      <div class="lb-row">
+        <span class="lb-rank" style="color:${rankColors[i] || '#404050'}">#${i+1}</span>
+        <span class="lb-name">${escapeHtml(e.name || '—')}</span>
+        <span class="badge badge-chrome" style="font-size:0.56rem;">${(e.level||'').toUpperCase()}</span>
+        <span class="lb-score">${(e.score||0).toLocaleString('id-ID')}</span>
+        <span class="lb-time">${GameState.formatTime(e.time || 0)}</span>
+      </div>
+    `).join('');
+  }
+
+  // ─── MODAL UTILS ─────────────────────────────────────────────────
+  function openModal(id)  { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  document.querySelectorAll('.modal-overlay').forEach(ov => {
+    ov.addEventListener('click', e => {
+      if (e.target === ov) ov.classList.remove('open');
+    });
+  });
+
+  // ─── TOAST ───────────────────────────────────────────────────────
+  function showToast(msg, type = 'info', duration = 3200) {
+    const icons = { success:'✅', error:'❌', warn:'⚠️', info:'ℹ️', achievement:'🏆' };
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.innerHTML = `<span class="toast-icon">${icons[type] || ''}</span><span>${escapeHtml(msg)}</span>`;
+    container.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, duration);
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  // ─── ACHIEVEMENT NOTIFICATIONS ────────────────────────────────────
+  GameState.on('stageComplete', ({ newAchievements }) => {
+    if (!newAchievements) return;
+    newAchievements.forEach((ach, i) => {
+      setTimeout(() => {
+        showToast(`${ach.icon} Achievement: ${ach.name}! (+${ach.xp} XP)`, 'achievement', 4500);
+        if (soundEnabled) GameState.playSound?.('medal');
+      }, i * 600);
+    });
+  });
+
+  // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+    }
+    if (e.key === 'Enter' && document.getElementById('modal-newgame').classList.contains('open')) {
+      startNewGame();
+    }
+    // Quick stage shortcuts (1-5 while holding Alt)
+    if (e.altKey && e.key >= '1' && e.key <= '5') {
+      enterStage(parseInt(e.key));
+    }
+  });
+
+  // ─── INIT ─────────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    initDashboard();
+
+    // Animate counters when visible
+    const observeCounters = () => {
+      document.querySelectorAll('.counter').forEach(el => {
+        const final = parseInt(el.textContent.replace(/[^0-9]/g, ''), 10);
+        if (!final) return;
+        let cur = 0;
+        const step = Math.ceil(final / 40);
+        const timer = setInterval(() => {
+          cur = Math.min(cur + step, final);
+          el.textContent = cur.toLocaleString('id-ID');
+          if (cur >= final) clearInterval(timer);
+        }, 25);
+      });
+    };
+    setTimeout(observeCounters, 500);
+  });
+  </script>
+</body>
+</html>
